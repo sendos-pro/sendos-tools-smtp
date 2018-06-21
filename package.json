@@ -10,16 +10,16 @@
     "babel-cli": "^6.26.0",
     "babel-preset-env": "^1.6.0"
   },
-  "homepage": "https://github.com/sendos-pro/validatee",
+  "homepage": "https://github.com/sendos-pro/sendos-tools-validate",
   "license": "MIT",
   "main": "./build/index.js",
   "name": "sendos-tools-validate",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sendos-pro/validate.git"
+    "url": "git+https://github.com/sendos-pro/sendos-tools-validate.git"
   },
   "scripts": {
     "build": "babel src --out-dir build"
   },
-  "version": "1.0.0"
+  "version": "1.0.1"
 }
