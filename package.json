@@ -1,0 +1,25 @@
+{
+  "author": {
+    "name": "Adam Tutaev",
+    "email": "a79313740346@yandex.ru"
+  },
+  "bundleDependencies": false,
+  "deprecated": false,
+  "description": "Desc",
+  "devDependencies": {
+    "babel-cli": "^6.26.0",
+    "babel-preset-env": "^1.6.0"
+  },
+  "homepage": "https://github.com/sendos-pro/validatee",
+  "license": "MIT",
+  "main": "./build/index.js",
+  "name": "sendos-tools-validate",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sendos-pro/validate.git"
+  },
+  "scripts": {
+    "build": "babel src --out-dir build"
+  },
+  "version": "1.0.0"
+}
