@@ -70,20 +70,21 @@ class sendosToolsMailValidate {
    * 
    * @static
    * @param {string} emailAddress - The full email address ypu want to check.
-   * @param {string[]} [invalidMailboxKeywords=[]] - An array of keywords to invalidate your check, ie. noreply, noemail, etc.
    * @returns {boolean} 
    * @memberof sendosToolsMailValidate
    */
   static resolvePattern(emailAddress, invalidMailboxKeywords = []) {
     const mailbox = emailAddress.split('@')[0];
     const regex = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
-    const isValidPattern = regex.test(emailAddress) || invalidMailboxKeywords.indexOf(mailbox) === -1;
+
+    const isValidPattern = regex.test(emailAddress);
+
     return isValidPattern;
   }
 
   // private instance method
   _resolvePattern(emailAddress, invalidMailboxKeywords = []) {
-    return sendosToolsMailValidate.resolvePattern(emailAddress, invalidMailboxKeywords);
+    return sendosToolsMailValidate.resolvePattern(emailAddress);
   }
 
   /**
