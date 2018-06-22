@@ -12,7 +12,7 @@
   },
   "homepage": "https://github.com/sendos-pro/sendos-tools-validate",
   "license": "MIT",
-  "main": "./build/index.js",
+  "main": "index.js",
   "name": "sendos-tools-validate",
   "repository": {
     "type": "git",
@@ -21,5 +21,5 @@
   "scripts": {
     "build": "babel src --out-dir build"
   },
-  "version": "1.0.4"
+  "version": "1.0.5"
 }
