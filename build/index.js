@@ -367,22 +367,28 @@ class sendosToolsMailValidate {
           const { status } = smtpMessages[2];
           // OK RESPONSE
           if (status === 250) {
-            result = 'Mailbox is valid.';
+            // result = 'Mailbox is valid.'
+            result = true;
             _this.state.result = result;
             _this.state.isValidDeliver = true;
           } else {
-            result = 'Mailbox is invalid.';
+            // result = 'Mailbox is invalid.'
+            result = false;
             _this.state.result = result;
             _this.state.isValidDeliver = false;
           }
         } else {
-          result = 'Could not validate mailbox.';
+          // result = 'Could not validate mailbox.'
+          result = false;
           _this.state.result = result;
           _this.state.isValidDeliver = false;
         }
         return _this.state;
       } catch (err) {
-        throw new Error('Mailbox check failed.');
+        // throw new Error('Mailbox check failed.')
+        result = true;
+        _this.state.result = result;
+        _this.state.isValidDeliver = true;
       }
     })();
   }
