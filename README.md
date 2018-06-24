@@ -1,15 +1,15 @@
-# sendos-tools-validate
+# sendos-tools-smtp
 
 ```
-npm i sendos-tools-validate
+npm i sendos-tools-smtp
 ```
 
 ## Usage
 
 ``` js
-const validate = require('sendos-tools-validate');
+const smtpCheck = require('sendos-tools-smtp');
 
-validate
+smtpCheck
 	.isValid('testers72@gmail.com')
 	.then(function(result) {
 		console.log(result);
