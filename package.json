@@ -10,16 +10,20 @@
     "babel-cli": "^6.26.0",
     "babel-preset-env": "^1.6.0"
   },
-  "homepage": "https://github.com/sendos-pro/sendos-tools-validate",
+  "homepage": "https://github.com/sendos-pro/sendos-tools-smtp",
   "license": "MIT",
   "main": "index.js",
-  "name": "sendos-tools-validate",
+  "name": "sendos-tools-smtp",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sendos-pro/sendos-tools-validate.git"
+    "url": "git+https://github.com/sendos-pro/sendos-tools-smtp.git"
   },
   "scripts": {
-    "build": "babel src --out-dir build"
+    "build": "babel src --out-dir build",
+    "dev": "babel src --out-dir build && node test.js"
   },
-  "version": "1.0.6"
+  "version": "1.0.0",
+  "dependencies": {
+    "randomstring": "^1.1.5"
+  }
 }
