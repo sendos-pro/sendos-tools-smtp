@@ -48,6 +48,16 @@ const isMail = domainOrEmail => {
   return isValidPattern;
 };
 
+const isIpv4 = value => {
+  const regex = /^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$/;
+  return regex.test(value);
+};
+
+const isDomain = value => {
+  const regex = /^(?=.{0,253}$)(([a-z0-9][a-z0-9-]{0,61}[a-z0-9]|[a-z0-9])\.)+((?=.*[^0-9])([a-z0-9][a-z0-9-]{0,61}[a-z0-9]|[a-z0-9]))$/i;
+  return regex.test(value);
+};
+
 /**
  * Email address validation and SMTP verification API.
 
@@ -72,39 +82,36 @@ class sendosToolsSmtpCheck {
       // args
       value,
       // domain,
-      aRecord: "",
-      ptrRecord: "",
-      smtpBanner: "",
+      smtpBanner: false,
+      connectionTime: 0,
       transactionTime: 0,
-      // results
-      rDnsMismatch: {
-        result: false,
-        info: false
-      },
-      validHostname: {
-        result: false,
-        info: false
-      },
-      bannerCheck: {
-        result: false,
-        info: false
-      },
-      supportTls: {
-        result: false,
-        info: false
-      },
-      openRelay: {
-        result: false,
-        info: false
-      },
-      catchAll: {
-        result: false,
-        info: false
+      aRecord: [],
+      // checked
+      checked: {
+        syntaxValid: {
+          result: false
+        },
+        isConnected: {
+          result: false
+        },
+        bannerCheck: {
+          result: false
+        },
+        validHostname: {
+          result: false
+        },
+        rDnsMismatch: {
+          result: false
+        },
+        supportTls: {
+          result: false
+        },
+        openRelay: {
+          result: false
+        }
       },
       // helpers
-      // mxRecords: [],
       smtpMessages: [],
-      errors: [],
       options: {
         timeout: timeout || 15000
       }
@@ -116,34 +123,53 @@ class sendosToolsSmtpCheck {
    */
   static resolvePattern(value) {
     return new Promise((resolve, reject) => {
-      const domainRegex = /^[a-zA-Z0-9_-]+\.[.a-zA-Z0-9_-]+$/;
-      const ipRegex = /(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])(?:\\.(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])){3}/;
-
-      let result = {};
-
-      if (ipRegex.test(value)) {
+      let result = [];
+      if (isIpv4(value)) {
         // if IP
-        _dns2.default.resolvePtr(value, (err, ptr) => {
+        _dns2.default.reverse(value, (err, ptr) => {
           if (err) return reject("Cant get PTR record");
-          result.aRecord = value;
-          result.ptrRecord = ptr;
-          resolve(result);
+
+          _dns2.default.resolve4(ptr[0], (err, aRecord) => {
+            // console.log(aRecord)
+            if (err) return reject("Cant get A record");
+
+            aRecord.forEach(function (item, i, arr) {
+              _dns2.default.reverse(item, (err, ptr) => {
+                if (err) return reject("Cant get PTR record");
+                result.push({ value: item, rDns: ptr[0] });
+
+                if (arr.length - 1 == i) {
+                  resolve(result);
+                }
+              });
+            });
+          });
         });
-      } else if (domainRegex.test(value)) {
-        _dns2.default.resolve4(value, (err, arecord) => {
+      } else if (isDomain(value)) {
+        _dns2.default.resolve4(value, (err, aRecord) => {
           // if DOMAIN
           // if(err) console.log(ptr)
           if (err) return reject("Cant get A record");
 
-          let ipv4 = arecord[0];
+          aRecord.forEach(function (item, i, arr) {
+            _dns2.default.reverse(item, (err, ptr) => {
+              if (err) return reject("Cant get PTR record");
+              result.push({ value: item, rDns: ptr[0] });
 
-          _dns2.default.reverse(ipv4, (err, ptr) => {
-
-            if (err) return reject("Cant get PTR record");
-            result.aRecord = ipv4;
-            result.ptrRecord = ptr[0];
-            resolve(result);
+              if (arr.length - 1 == i) {
+                resolve(result);
+              }
+            });
           });
+
+          // let ipv4 = aRecord;
+
+          // dns.reverse(ipv4[0], (err, ptr) => {
+          //   if (err) return reject("Cant get PTR record");
+          //   result.aRecord = ipv4;
+          //   result.rDns = ptr[0];
+          //   resolve(result);
+          // });
         });
       } else {
         return reject("MX or IP-address pattern is invalid.");
@@ -159,37 +185,67 @@ class sendosToolsSmtpCheck {
   /**
    * rDnsMismatch
    */
-  static rDnsMismatch(domain) {
-    return domain;
+  static rDnsMismatch(aRecord, value) {
+    return new Promise((resolve, reject) => {
+      if (isIpv4(value)) {
+        aRecord.forEach(function (item, i, arr) {
+          if (item.value == value) {
+            resolve(true);
+          }
+        });
+      } else if (isDomain(value)) {
+        aRecord.forEach(function (item, i, arr) {
+          if (item.rDns == value) {
+            resolve(true);
+          }
+        });
+      } else {
+        resolve(false);
+      }
+    });
   }
 
   // private instance method
-  _rDnsMismatch(domain) {
-    return sendosToolsSmtpCheck.rDnsMismatch(domain);
+  _rDnsMismatch(aRecord, value) {
+    return sendosToolsSmtpCheck.rDnsMismatch(aRecord, value);
   }
 
   /**
    * validHostname
    */
-  static validHostname(domain) {
-    return domain;
+  static validHostname(aRecord, hostName) {
+    return new Promise((resolve, reject) => {
+      aRecord.forEach(function (item, i, arr) {
+        if (item.rDns === hostName) {
+          resolve(true);
+        }
+      });
+      reject(false);
+    });
   }
 
   // private instance method
-  _validHostname(domain) {
-    return sendosToolsSmtpCheck.validHostname(domain);
+  _validHostname(aRecord, hostName) {
+    return sendosToolsSmtpCheck.validHostname(aRecord, hostName);
   }
 
   /**
    * bannerCheck
    */
-  static bannerCheck(domain) {
-    return domain;
+  static bannerCheck(smtpBanner, aRecord) {
+    return new Promise((resolve, reject) => {
+      aRecord.forEach(function (item, i, arr) {
+        if (item.rDns === smtpBanner) {
+          resolve(true);
+        }
+      });
+      reject(false);
+    });
   }
 
   // private instance method
-  _bannerCheck(domain) {
-    return sendosToolsSmtpCheck.bannerCheck(domain);
+  _bannerCheck(smtpBanner, aRecord) {
+    return sendosToolsSmtpCheck.bannerCheck(smtpBanner, aRecord);
   }
 
   /**
@@ -261,6 +317,8 @@ class sendosToolsSmtpCheck {
       const mailFrom = "supertool@sendos.pro";
       const mailTo = "notrelay@" + fromHost;
       let transactionTime = 0;
+      let connectionTime = 0;
+      let smtpBanner = false;
 
       let startTime = new Date().getTime();
 
@@ -278,7 +336,7 @@ class sendosToolsSmtpCheck {
       smtp.setTimeout(timeout);
 
       smtp.on("timeout", () => {
-        smtp.destroy({ code: 'ETIMEDOUT' });
+        smtp.destroy({ code: "ETIMEDOUT" });
       });
 
       smtp.on("error", err => {
@@ -296,6 +354,9 @@ class sendosToolsSmtpCheck {
         transactionTime += queryTime;
 
         if (status === 220) {
+          smtpBanner = data.match(/^220 (.+?) /)[1];
+          connectionTime = queryTime;
+
           smtpMessages.push({
             command: "CONNECT",
             response: data,
@@ -320,6 +381,8 @@ class sendosToolsSmtpCheck {
           smtp.write("QUIT\r\n");
           smtp.end(() => {
             resolve({
+              smtpBanner: smtpBanner,
+              connectionTime: connectionTime,
               transactionTime: transactionTime,
               response: smtpMessages
             });
@@ -351,13 +414,10 @@ class sendosToolsSmtpCheck {
       try {
         const resolvePattern = yield _this._resolvePattern(_this.state.value);
 
-        let aRecord = resolvePattern.aRecord;
-        let ptrRecord = resolvePattern.ptrRecord;
-
-        _this.state.aRecord = aRecord;
-        _this.state.ptrRecord = ptrRecord;
+        _this.state.aRecord = resolvePattern;
+        _this.state.checked.syntaxValid.result = true;
       } catch (err) {
-        _this.state.errors.push(err);
+        _this.state.checked.syntaxValid.error = err;
         return _this.state;
         // throw new Error("resolvePattern check failed.");
       }
@@ -374,73 +434,90 @@ class sendosToolsSmtpCheck {
         });
 
         _this.state.smtpMessages = smtpMessages.response;
+        _this.state.smtpBanner = smtpMessages.smtpBanner;
         _this.state.transactionTime = smtpMessages.transactionTime * 5;
-        // this.state.result = true;
+        _this.state.connectionTime = smtpMessages.connectionTime;
+        _this.state.checked.isConnected.result = true;
       } catch (err) {
-
         let timeout = _this.state.options.timeout;
-        let message = 'Unable to connect ' + _this.state.value;
+        let message = "Unable to connect " + _this.state.value;
 
-        if (err.code == 'ETIMEDOUT') {
+        if (err.code == "ETIMEDOUT") {
           message = "Unable to connect " + _this.state.value + " after " + timeout / 1000 + " seconds.";
         }
 
-        _this.state.errors.push(message);
+        _this.state.checked.isConnected.error = message;
         return _this.state;
         // throw new Error("resolveSmtp check failed.");
       }
 
       // bannerCheck
       try {
-        const isBannerCheck = _this._bannerCheck(_this.state.domain);
+        const isBannerCheck = _this._bannerCheck(_this.state.smtpBanner, _this.state.aRecord);
 
-        // this.state.smtpBanner = smtpMessages.smtpBanner;
+        if (isBannerCheck) {
+          _this.state.checked.bannerCheck.result = true;
+        } else {
+          _this.state.checked.bannerCheck.error = "Не прошли bannerCheck";
+        }
       } catch (err) {
         throw new Error("bannerCheck check failed.");
       }
 
       // rDnsMismatch
       try {
-        const isRdnsMismatch = _this._rDnsMismatch(_this.state.domain);
+        const isRdnsMismatch = _this._rDnsMismatch(_this.state.aRecord, _this.state.value);
 
-        _this.state.rDnsMismatch = isRdnsMismatch;
+        if (isRdnsMismatch) {
+          _this.state.checked.rDnsMismatch.result = true;
+        } else {
+          _this.state.checked.rDnsMismatch.error = "Не прошли rDnsMismatch";
+        }
       } catch (err) {
         throw new Error("rDnsMismatch check failed.");
       }
 
       // validHostname
       try {
-        const isValidHostname = _this._validHostname(_this.state.domain);
+        const isValidHostname = _this._validHostname(_this.state.aRecord, _this.state.smtpMessages[1].response[0].match(/^250-(.+?) /)[1]);
+
+        if (isValidHostname) {
+          _this.state.checked.validHostname.result = true;
+        } else {
+          _this.state.checked.validHostname.error = "Не прошли validHostname";
+        }
       } catch (err) {
         throw new Error("validHostname check failed.");
       }
 
       // tls
       try {
-        const isTls = _this._tls(_this.state.domain);
+        const isTls = _this.state.smtpMessages[1].response.join().match(/250\-STARTTLS/);
+
+        if (isTls) {
+          _this.state.checked.supportTls.result = true;
+        } else {
+          _this.state.checked.supportTls.error = "Не прошли tls";
+        }
       } catch (err) {
         throw new Error("tls check failed.");
       }
 
       // openRelay
       try {
-        const isOpenRelay = _this._openRelay(_this.state.domain);
+
+        const isOpenRelay = _this.state.smtpMessages[3].response.match(/^250/);
+
+        if (!isOpenRelay) {
+          _this.state.checked.openRelay.result = true;
+        } else {
+          _this.state.checked.openRelay.error = "Не прошли openRelay";
+        }
       } catch (err) {
-        console.log(err);
         throw new Error("openRelay check failed.");
       }
 
       // FINISH
-      const isComplete = _this.state.smtpMessages.length === 4;
-
-      if (isComplete) {
-        const { status } = _this.state.errors;
-
-        if (_this.state.errors.length === 0) {
-          // this.state.result = true;
-        }
-      }
-
       return _this.state;
     })();
   }
