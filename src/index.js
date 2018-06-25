@@ -45,18 +45,21 @@ const isMail = domainOrEmail => {
  * @class sendosToolsSmtpCheck
  */
 class sendosToolsSmtpCheck {
-  constructor({ domainOrEmail, timeout }) {
-    let domain = domainOrEmail.toLowerCase();
+  constructor({ value, timeout }) {
+    // Почтовый адрес. Домен. Айпи. MX
 
-    if (isMail(domain)) {
-      domain = domain.split("@")[1];
-    }
+    // Проверим МКС у домена, если есть, то работаем как с МКС, если нет, то проверяем на соединение
+    value = value.toLowerCase();
 
     this.state = {
       // result
       result: false,
       // args
-      domain,
+      value,
+      // domain,
+      aRecord: "",
+      ptrRecord: "",
+      smtpBanner: "",
       transactionTime: 0,
       // results
       rDnsMismatch: {
@@ -84,11 +87,11 @@ class sendosToolsSmtpCheck {
         info: false
       },
       // helpers
-      mxRecords: [],
+      // mxRecords: [],
       smtpMessages: [],
       errors: [],
       options: {
-        timeout: timeout || 10000
+        timeout: timeout || 15000
       }
     };
   }
@@ -96,14 +99,46 @@ class sendosToolsSmtpCheck {
   /**
    * Check pattern
    */
-  static resolvePattern(domain) {
-    const regex = /^[a-zA-Z0-9_-]+\.[.a-zA-Z0-9_-]+$/;
-    return regex.test(domain);
+  static resolvePattern(value) {
+    return new Promise((resolve, reject) => {
+      const domainRegex = /^[a-zA-Z0-9_-]+\.[.a-zA-Z0-9_-]+$/;
+      const ipRegex = /(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])(?:\\.(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])){3}/;
+
+      let result = {};
+
+      if (ipRegex.test(value)) {
+        // if IP
+        dns.resolvePtr(value, (err, ptr) => {
+          if (err) return reject("Cant get PTR record");
+          result.aRecord = value;
+          result.ptrRecord = ptr;
+          resolve(result);
+        });
+      } else if (domainRegex.test(value)) {
+        dns.resolve4(value, (err, arecord) => {
+          // if DOMAIN
+          // if(err) console.log(ptr)
+          if (err) return reject("Cant get A record");
+
+          let ipv4 = arecord[0];
+
+          dns.reverse(ipv4, (err, ptr) => {
+
+            if (err) return reject("Cant get PTR record");
+            result.aRecord = ipv4;
+            result.ptrRecord = ptr[0];
+            resolve(result);
+          });
+        });
+      } else {
+        return reject("MX or IP-address pattern is invalid.");
+      }
+    });
   }
 
   // private instance method
-  _resolvePattern(domain) {
-    return sendosToolsSmtpCheck.resolvePattern(domain);
+  _resolvePattern(value) {
+    return sendosToolsSmtpCheck.resolvePattern(value);
   }
 
   /**
@@ -201,10 +236,9 @@ class sendosToolsSmtpCheck {
    * @returns {object[]} - Object of SMTP responses [ {command, status, message} ]
    * @memberof sendosToolsSmtpCheck
    */
-  static resolveSmtp({ mxRecords, timeout }) {
+  static resolveSmtp({ host, timeout }) {
     return new Promise((resolve, reject) => {
-      const host = mxRecords[0].exchange;
-      const fromHost = randomstring.generate(7).toLowerCase() + ".example.com";
+      const fromHost = randomstring.generate(7).toLowerCase() + ".sendos.pro";
       const mailFrom = "supertool@sendos.pro";
       const mailTo = "notrelay@" + fromHost;
       let transactionTime = 0;
@@ -219,13 +253,18 @@ class sendosToolsSmtpCheck {
 
       const stepMax = commands.length - 1;
       let step = 0;
-
-      const smtp = net.createConnection({ port: 25, host });
+      const smtp = net.createConnection({ port: 25, host }, () => {
+        // console.log("Connected to server!");
+      });
 
       let smtpMessages = [];
 
       smtp.setEncoding("ascii");
       smtp.setTimeout(timeout);
+
+      smtp.on("timeout", () => {
+        smtp.destroy({code: 'ETIMEDOUT'});
+      });
 
       smtp.on("error", err => {
         smtp.end(() => {
@@ -243,7 +282,7 @@ class sendosToolsSmtpCheck {
 
         if (status === 220) {
           smtpMessages.push({
-            command: "CONNECTION",
+            command: "CONNECT",
             response: data,
             status,
             time: queryTime
@@ -258,7 +297,6 @@ class sendosToolsSmtpCheck {
           });
         }
 
-        // if (status > 200) {
         if (step <= stepMax) {
           startTime = new Date().getTime();
           smtp.write(commands[step].command + "\r\n");
@@ -272,16 +310,15 @@ class sendosToolsSmtpCheck {
             });
           });
         }
-        // }
+
       });
     });
   }
 
   // private instance method
-  _resolveSmtp({ domain, mxRecords, timeout }) {
+  _resolveSmtp({ host, timeout }) {
     return sendosToolsSmtpCheck.resolveSmtp({
-      domain,
-      mxRecords,
+      host,
       timeout
     });
   }
@@ -294,49 +331,64 @@ class sendosToolsSmtpCheck {
    */
   async check() {
     // resolvePattern
-    const isValidSyntax = this._resolvePattern(this.state.domain);
-    if (!isValidSyntax) {
-      this.state.errors.push("Domain or email pattern is invalid.");
-      return this.state;
-    }
-
-    // resolveMx
     try {
-      const mxRecords = await this._resolveMx(this.state.domain);
-      const isValidMxRecord = mxRecords.length > 0;
-      this.state.mxRecords = mxRecords;
-      if (!isValidMxRecord) {
-        this.state.errors.push("MX record not found.");
-        return this.state;
-      }
+      const resolvePattern = await this._resolvePattern(this.state.value);
+
+      let aRecord = resolvePattern.aRecord;
+      let ptrRecord = resolvePattern.ptrRecord;
+
+      this.state.aRecord = aRecord;
+      this.state.ptrRecord = ptrRecord;
     } catch (err) {
-      this.state.error.push("MX record not found.");
+      this.state.errors.push(err);
       return this.state;
-      throw new Error("resolveMx check failed.");
+      // throw new Error("resolvePattern check failed.");
     }
 
     // resolveSmtp
     try {
-      const { domain, mxRecords, options } = this.state;
+      const { value, options } = this.state;
       let timeout = options.timeout;
+      let host = value;
+
       const smtpMessages = await this._resolveSmtp({
-        domain,
-        mxRecords,
+        host,
         timeout
       });
+
       this.state.smtpMessages = smtpMessages.response;
       this.state.transactionTime = smtpMessages.transactionTime * 5;
+      // this.state.result = true;
+       
     } catch (err) {
-      this.state.errors.push("Email server is invalid or not available.");
+
+      let timeout = this.state.options.timeout;
+      let message = 'Unable to connect ' + this.state.value
+
+      if(err.code == 'ETIMEDOUT') {
+        message = "Unable to connect "+ this.state.value +" after " + timeout / 1000 + " seconds."
+      }
+
+      this.state.errors.push(message);
       return this.state;
-      throw new Error("resolveSmtp check failed.");
+      // throw new Error("resolveSmtp check failed.");
+    }
+
+
+    // bannerCheck
+    try {
+      const isBannerCheck = this._bannerCheck(this.state.domain);
+
+      // this.state.smtpBanner = smtpMessages.smtpBanner;
+    } catch (err) {
+      throw new Error("bannerCheck check failed.");
     }
 
     // rDnsMismatch
     try {
       const isRdnsMismatch = this._rDnsMismatch(this.state.domain);
 
-      // this.state.rDnsMismatch = rDnsMismatch
+      this.state.rDnsMismatch = isRdnsMismatch;
     } catch (err) {
       throw new Error("rDnsMismatch check failed.");
     }
@@ -346,13 +398,6 @@ class sendosToolsSmtpCheck {
       const isValidHostname = this._validHostname(this.state.domain);
     } catch (err) {
       throw new Error("validHostname check failed.");
-    }
-
-    // bannerCheck
-    try {
-      const isBannerCheck = this._bannerCheck(this.state.domain);
-    } catch (err) {
-      throw new Error("bannerCheck check failed.");
     }
 
     // tls
@@ -372,19 +417,16 @@ class sendosToolsSmtpCheck {
 
     // FINISH
     const isComplete = this.state.smtpMessages.length === 4;
-    let result = "";
 
     if (isComplete) {
-      const { status } = this.state.smtpMessages[0];
-      // OK RESPONSE
-      if (status === 220) {
-        this.state.result = true;
-      } else {
-        this.state.result = false;
+      const { status } = this.state.errors;
+
+      if (this.state.errors.length === 0) {
+        // this.state.result = true;
       }
-    } else {
-      this.state.result = false;
+
     }
+
     return this.state;
   }
 }

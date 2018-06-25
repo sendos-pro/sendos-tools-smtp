@@ -22,8 +22,9 @@
     "build": "babel src --out-dir build",
     "dev": "babel src --out-dir build && node test.js"
   },
-  "version": "1.0.2",
+  "version": "1.0.3",
   "dependencies": {
+    "ip-regex": "^3.0.0",
     "randomstring": "^1.1.5"
   }
 }
