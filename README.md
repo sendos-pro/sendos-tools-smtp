@@ -10,7 +10,7 @@ npm i sendos-tools-smtp
 const smtpCheck = require('sendos-tools-smtp');
 
 smtpCheck
-	.isValid('testers72@gmail.com')
+	.check('testers72@gmail.com')
 	.then(function(result) {
 		console.log(result);
 	})

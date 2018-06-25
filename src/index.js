@@ -2,27 +2,37 @@
  * @title sendosToolsSmtpCheck
  */
 
- import dns from "dns"
- import net from "net"
- import os from "os"
- import randomstring from "randomstring"
+import dns from "dns";
+import net from "net";
+import os from "os";
+import randomstring from "randomstring";
+import maxmind from "maxmind";
 
- const resolveMx = hostname => {
+const resolveMx = hostname => {
   return new Promise((resolve, reject) => {
     dns.resolveMx(hostname, (err, val) => {
       if (err) {
-        return reject(err)
+        return reject(err);
       }
-      resolve(val)
-    })
-  })
-}
+      val.forEach(function(item, i, arr) {
+        let domain = val[i].exchange;
+
+        dns.resolve4(domain, (err, ipv4) => {
+          if (!err) {
+            val[i].ip = ipv4[0];
+          }
+        });
+      });
+      resolve(val);
+    });
+  });
+};
 
 const isMail = domainOrEmail => {
-  const regex = /^(([^<>()\[\]\\.,:\s@"]+(\.[^<>()\[\]\\.,:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
-  const isValidPattern = regex.test(domainOrEmail)
-  return isValidPattern
-}
+  const regex = /^(([^<>()\[\]\\.,:\s@"]+(\.[^<>()\[\]\\.,:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+  const isValidPattern = regex.test(domainOrEmail);
+  return isValidPattern;
+};
 
 /**
  * Email address validation and SMTP verification API.
@@ -35,120 +45,126 @@ const isMail = domainOrEmail => {
  * @returns {instance}
  * @class sendosToolsSmtpCheck
  */
- class sendosToolsSmtpCheck {
+class sendosToolsSmtpCheck {
   constructor({ domainOrEmail, timeout }) {
-    let domain = domainOrEmail.toLowerCase()
+    let domain = domainOrEmail.toLowerCase();
 
     if (isMail(domain)) {
-      domain = domain.split("@")[1]
+      domain = domain.split("@")[1];
     }
 
     this.state = {
       // result
       result: false,
-
       // args
       domain,
-      timeout: timeout || 10000,
-
+      transactionTime: 0,
       // results
       rDnsMismatch: {
         result: false,
-        data: false
+        info: false
       },
       validHostname: {
         result: false,
-        data: false
+        info: false
       },
       bannerCheck: {
         result: false,
-        data: false
+        info: false
       },
-      tls: {
-        result: false
+      supportTls: {
+        result: false,
+        info: false
       },
       openRelay: {
-        result: false
+        result: false,
+        info: false
       },
-
+      catchAll: {
+        result: false,
+        info: false
+      },
       // helpers
       mxRecords: [],
       smtpMessages: [],
-      errors: []
-    }
+      errors: [],
+      options: {
+        timeout: timeout || 10000
+      }
+    };
   }
 
   /**
    * Check pattern
    */
-   static resolvePattern(domain) {
-    const regex = /^[a-zA-Z0-9_-]+\.[.a-zA-Z0-9_-]+$/
-    return regex.test(domain)
+  static resolvePattern(domain) {
+    const regex = /^[a-zA-Z0-9_-]+\.[.a-zA-Z0-9_-]+$/;
+    return regex.test(domain);
   }
 
   // private instance method
   _resolvePattern(domain) {
-    return sendosToolsSmtpCheck.resolvePattern(domain)
+    return sendosToolsSmtpCheck.resolvePattern(domain);
   }
 
   /**
    * rDnsMismatch
    */
-   static rDnsMismatch(domain) {
-    return domain
+  static rDnsMismatch(domain) {
+    return domain;
   }
 
   // private instance method
   _rDnsMismatch(domain) {
-    return sendosToolsSmtpCheck.rDnsMismatch(domain)
+    return sendosToolsSmtpCheck.rDnsMismatch(domain);
   }
 
   /**
    * validHostname
    */
-   static validHostname(domain) {
-    return domain
+  static validHostname(domain) {
+    return domain;
   }
 
   // private instance method
   _validHostname(domain) {
-    return sendosToolsSmtpCheck.validHostname(domain)
+    return sendosToolsSmtpCheck.validHostname(domain);
   }
 
   /**
    * bannerCheck
    */
-   static bannerCheck(domain) {
-    return domain
+  static bannerCheck(domain) {
+    return domain;
   }
 
   // private instance method
   _bannerCheck(domain) {
-    return sendosToolsSmtpCheck.bannerCheck(domain)
+    return sendosToolsSmtpCheck.bannerCheck(domain);
   }
 
   /**
    * tls
    */
-   static tls(domain) {
-    return domain
+  static tls(domain) {
+    return domain;
   }
 
   // private instance method
   _tls(domain) {
-    return sendosToolsSmtpCheck.tls(domain)
+    return sendosToolsSmtpCheck.tls(domain);
   }
 
   /**
    * openRelay
    */
-   static openRelay(domain) {
-    return domain
+  static openRelay(domain) {
+    return domain;
   }
 
   // private instance method
   _openRelay(domain) {
-    return sendosToolsSmtpCheck.openRelay(domain)
+    return sendosToolsSmtpCheck.openRelay(domain);
   }
 
   /**
@@ -159,19 +175,19 @@ const isMail = domainOrEmail => {
    * @returns {Object[]} - Returns MX records array { priority, exchange }
    * @memberof sendosToolsSmtpCheck
    */
-   static async resolveMx(domain) {
+  static async resolveMx(domain) {
     // mx check
     try {
-      let mxRecords = await resolveMx(domain)
-      return mxRecords.sort((a, b) => a.priority - b.priority)
+      let mxRecords = await resolveMx(domain);
+      return mxRecords.sort((a, b) => a.priority - b.priority);
     } catch (err) {
-      return []
+      return [];
     }
   }
 
   // private instance method
   _resolveMx(domain) {
-    return sendosToolsSmtpCheck.resolveMx(domain)
+    return sendosToolsSmtpCheck.resolveMx(domain);
   }
 
   /**
@@ -186,71 +202,80 @@ const isMail = domainOrEmail => {
    * @returns {object[]} - Object of SMTP responses [ {command, status, message} ]
    * @memberof sendosToolsSmtpCheck
    */
-   static resolveSmtp({ mxRecords, timeout }) {
+  static resolveSmtp({ mxRecords, timeout }) {
     return new Promise((resolve, reject) => {
-      const host = mxRecords[0].exchange
-      const fromHost = randomstring.generate(7).toLowerCase() + ".example.com"
-      const mailFrom = "supertool@sendos.pro"
-      const mailTo = "notrelay@" + fromHost
+      const host = mxRecords[0].exchange;
+      const fromHost = randomstring.generate(7).toLowerCase() + ".example.com";
+      const mailFrom = "supertool@sendos.pro";
+      const mailTo = "notrelay@" + fromHost;
+      let transactionTime = 0;
 
-      let startTime = new Date().getTime()
+      let startTime = new Date().getTime();
 
       const commands = [
-      `EHLO ${fromHost}`,
-      `MAIL FROM: <${mailFrom}>`,
-      `RCPT TO: <${mailTo}>`
-      ]
+        { command: `EHLO ${fromHost}`, type: "ehlo" },
+        { command: `MAIL FROM: <${mailFrom}>`, type: "mailFrom" },
+        { command: `RCPT TO: <${mailTo}>`, type: "rcptTo" }
+      ];
 
-      const stepMax = commands.length - 1
-      let step = 0
+      const stepMax = commands.length - 1;
+      let step = 0;
 
-      const smtp = net.createConnection({ port: 25, host })
+      const smtp = net.createConnection({ port: 25, host });
 
-      let smtpMessages = []
+      let smtpMessages = [];
 
-      smtp.setEncoding("ascii")
-      smtp.setTimeout(timeout)
+      smtp.setEncoding("ascii");
+      smtp.setTimeout(timeout);
 
       smtp.on("error", err => {
         smtp.end(() => {
-          reject(err)
-        })
-      })
+          reject(err);
+        });
+      });
 
       smtp.on("data", data => {
-        const status = parseInt(data.substring(0, 3))
-        const responce = data.split("\r\n").slice(0, -1)
+        const status = parseInt(data.substring(0, 3));
+        const response = data.split("\r\n").slice(0, -1);
+
+        let queryTime = new Date().getTime() - startTime;
+
+        transactionTime += queryTime;
 
         if (status === 220) {
           smtpMessages.push({
-            command: "CONNECT",
-            message: data,
+            command: "connection",
+            responce: data,
             status,
-            time: new Date().getTime() - startTime
-          })
+            time: queryTime
+          });
         } else {
+          let type = commands[step - 1].type;
           smtpMessages.push({
-            command: commands[step - 1],
-            message: responce.length == 1 ? data : responce,
+            command: type,
+            responce: response.length == 1 ? data : response,
             status,
-            time: new Date().getTime() - startTime
-          })
+            time: queryTime
+          });
         }
 
         // if (status > 200) {
-          if (step <= stepMax) {
-            startTime = new Date().getTime()
-            smtp.write(commands[step] + "\r\n")
-            step++
-          } else {
-            smtp.write("QUIT\r\n")
-            smtp.end(() => {
-              resolve(smtpMessages)
-            })
-          }
+        if (step <= stepMax) {
+          startTime = new Date().getTime();
+          smtp.write(commands[step].command + "\r\n");
+          step++;
+        } else {
+          smtp.write("QUIT\r\n");
+          smtp.end(() => {
+            resolve({
+              transactionTime: transactionTime,
+              response: smtpMessages
+            });
+          });
+        }
         // }
-      })
-    })
+      });
+    });
   }
 
   // private instance method
@@ -259,7 +284,7 @@ const isMail = domainOrEmail => {
       domain,
       mxRecords,
       timeout
-    })
+    });
   }
 
   /**
@@ -268,120 +293,101 @@ const isMail = domainOrEmail => {
    * @returns {Object} - The instance state object containing all of the isValid* boolean checks, MX Records, and SMTP Messages.
    * @memberof sendosToolsSmtpCheck
    */
-   async check() {
-    console.log("resolvePattern")
+  async check() {
     // resolvePattern
-    const isValidSyntax = this._resolvePattern(this.state.domain)
+    const isValidSyntax = this._resolvePattern(this.state.domain);
     if (!isValidSyntax) {
-      this.state.errors.push("Domain or email pattern is invalid.")
-      return this.state
+      this.state.errors.push("Domain or email pattern is invalid.");
+      return this.state;
     }
 
     // resolveMx
     try {
-      console.log("resolveMx")
-      const mxRecords = await this._resolveMx(this.state.domain)
-      const isValidMxRecord = mxRecords.length > 0
-      this.state.mxRecords = mxRecords
-      this.state.isValidMxRecord = isValidMxRecord
+      const mxRecords = await this._resolveMx(this.state.domain);
+      const isValidMxRecord = mxRecords.length > 0;
+      this.state.mxRecords = mxRecords;
       if (!isValidMxRecord) {
-        this.state.errors.push("MX record not found.")
-        return this.state
+        this.state.errors.push("MX record not found.");
+        return this.state;
       }
     } catch (err) {
-      this.state.error.push("MX record not found.")
-      return this.state
-      throw new Error("MX record check failed.")
+      this.state.error.push("MX record not found.");
+      return this.state;
+      throw new Error("resolveMx check failed.");
     }
 
     // resolveSmtp
     try {
-      console.log("resolveSmtp")
-      const { domain, mxRecords, timeout } = this.state
+      const { domain, mxRecords, options } = this.state;
+      let timeout = options.timeout;
       const smtpMessages = await this._resolveSmtp({
         domain,
         mxRecords,
         timeout
-      })
-      this.state.smtpMessages = smtpMessages
-
+      });
+      this.state.smtpMessages = smtpMessages.response;
+      this.state.transactionTime = smtpMessages.transactionTime * 5;
     } catch (err) {
-      this.state.errors.push("Email server is invalid or not available.")
-      return this.state
-      throw new Error('Mailbox check failed.')
+      this.state.errors.push("Email server is invalid or not available.");
+      return this.state;
+      throw new Error("resolveSmtp check failed.");
     }
 
     // rDnsMismatch
     try {
-      console.log("rDnsMismatch")
-      const isRdnsMismatch = this._rDnsMismatch(this.state.domain)
+      const isRdnsMismatch = this._rDnsMismatch(this.state.domain);
 
       // this.state.rDnsMismatch = rDnsMismatch
     } catch (err) {
-      throw new Error("rDnsMismatch check failed.")
+      throw new Error("rDnsMismatch check failed.");
     }
 
     // validHostname
     try {
-      console.log("validHostname")
-      const isValidHostname = this._validHostname(this.state.domain)
-
+      const isValidHostname = this._validHostname(this.state.domain);
     } catch (err) {
-      throw new Error("validHostname check failed.")
+      throw new Error("validHostname check failed.");
     }
 
     // bannerCheck
     try {
-      console.log("bannerCheck")
-      const isBannerCheck = this._bannerCheck(this.state.domain)
-
+      const isBannerCheck = this._bannerCheck(this.state.domain);
     } catch (err) {
-      throw new Error("bannerCheck check failed.")
+      throw new Error("bannerCheck check failed.");
     }
 
     // tls
     try {
-      console.log("tls")
-      const isTls = this._tls(this.state.domain)
-
+      const isTls = this._tls(this.state.domain);
     } catch (err) {
-      throw new Error("tls check failed.")
+      throw new Error("tls check failed.");
     }
 
     // openRelay
     try {
-      console.log("openRelay")
-      const isOpenRelay = this._openRelay(this.state.domain)
-
+      const isOpenRelay = this._openRelay(this.state.domain);
     } catch (err) {
-      console.log(err)
-      throw new Error("openRelay check failed.")
+      console.log(err);
+      throw new Error("openRelay check failed.");
     }
 
     // FINISH
-    const isComplete = this.state.smtpMessages.length === 4
-    let result = ""
+    const isComplete = this.state.smtpMessages.length === 4;
+    let result = "";
 
     if (isComplete) {
-      const { status } = this.state.smtpMessages[3]
+      const { status } = this.state.smtpMessages[0];
       // OK RESPONSE
-      if (status === 250) {
-        // result = 'Mailbox is valid.'
-        this.state.result = true
+      if (status === 220) {
+        this.state.result = true;
       } else {
-        // result = 'Mailbox is invalid.'
-        this.state.result = false
+        this.state.result = false;
       }
     } else {
-      // result = 'Could not validate mailbox.'
-      this.state.result = false
+      this.state.result = false;
     }
-    
-    console.log("FINISH")
-    
-    return this.state
-
+    return this.state;
   }
 }
 
-module.exports = sendosToolsSmtpCheck
+module.exports = sendosToolsSmtpCheck;

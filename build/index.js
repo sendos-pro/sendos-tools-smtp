@@ -16,6 +16,10 @@ var _randomstring = require("randomstring");
 
 var _randomstring2 = _interopRequireDefault(_randomstring);
 
+var _maxmind = require("maxmind");
+
+var _maxmind2 = _interopRequireDefault(_maxmind);
+
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function _asyncToGenerator(fn) { return function () { var gen = fn.apply(this, arguments); return new Promise(function (resolve, reject) { function step(key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { return Promise.resolve(value).then(function (value) { step("next", value); }, function (err) { step("throw", err); }); } } return step("next"); }); }; } /**
@@ -28,6 +32,15 @@ const resolveMx = hostname => {
       if (err) {
         return reject(err);
       }
+      val.forEach(function (item, i, arr) {
+        let domain = val[i].exchange;
+
+        _dns2.default.resolve4(domain, (err, ipv4) => {
+          if (!err) {
+            val[i].ip = ipv4[0];
+          }
+        });
+      });
       resolve(val);
     });
   });
@@ -61,35 +74,41 @@ class sendosToolsSmtpCheck {
     this.state = {
       // result
       result: false,
-
       // args
       domain,
-      timeout: timeout || 10000,
-
+      transactionTime: 0,
       // results
       rDnsMismatch: {
         result: false,
-        data: false
+        info: false
       },
       validHostname: {
         result: false,
-        data: false
+        info: false
       },
       bannerCheck: {
         result: false,
-        data: false
+        info: false
       },
-      tls: {
-        result: false
+      supportTls: {
+        result: false,
+        info: false
       },
       openRelay: {
-        result: false
+        result: false,
+        info: false
       },
-
+      catchAll: {
+        result: false,
+        info: false
+      },
       // helpers
       mxRecords: [],
       smtpMessages: [],
-      errors: []
+      errors: [],
+      options: {
+        timeout: timeout || 10000
+      }
     };
   }
 
@@ -211,10 +230,11 @@ class sendosToolsSmtpCheck {
       const fromHost = _randomstring2.default.generate(7).toLowerCase() + ".example.com";
       const mailFrom = "supertool@sendos.pro";
       const mailTo = "notrelay@" + fromHost;
+      let transactionTime = 0;
 
       let startTime = new Date().getTime();
 
-      const commands = [`EHLO ${fromHost}`, `MAIL FROM: <${mailFrom}>`, `RCPT TO: <${mailTo}>`];
+      const commands = [{ command: `EHLO ${fromHost}`, type: "ehlo" }, { command: `MAIL FROM: <${mailFrom}>`, type: "mailFrom" }, { command: `RCPT TO: <${mailTo}>`, type: "rcptTo" }];
 
       const stepMax = commands.length - 1;
       let step = 0;
@@ -234,33 +254,41 @@ class sendosToolsSmtpCheck {
 
       smtp.on("data", data => {
         const status = parseInt(data.substring(0, 3));
-        const responce = data.split("\r\n").slice(0, -1);
+        const response = data.split("\r\n").slice(0, -1);
+
+        let queryTime = new Date().getTime() - startTime;
+
+        transactionTime += queryTime;
 
         if (status === 220) {
           smtpMessages.push({
-            command: "CONNECT",
-            message: data,
+            command: "connection",
+            responce: data,
             status,
-            time: new Date().getTime() - startTime
+            time: queryTime
           });
         } else {
+          let type = commands[step - 1].type;
           smtpMessages.push({
-            command: commands[step - 1],
-            message: responce.length == 1 ? data : responce,
+            command: type,
+            responce: response.length == 1 ? data : response,
             status,
-            time: new Date().getTime() - startTime
+            time: queryTime
           });
         }
 
         // if (status > 200) {
         if (step <= stepMax) {
           startTime = new Date().getTime();
-          smtp.write(commands[step] + "\r\n");
+          smtp.write(commands[step].command + "\r\n");
           step++;
         } else {
           smtp.write("QUIT\r\n");
           smtp.end(() => {
-            resolve(smtpMessages);
+            resolve({
+              transactionTime: transactionTime,
+              response: smtpMessages
+            });
           });
         }
         // }
@@ -287,7 +315,6 @@ class sendosToolsSmtpCheck {
     var _this = this;
 
     return _asyncToGenerator(function* () {
-      console.log("resolvePattern");
       // resolvePattern
       const isValidSyntax = _this._resolvePattern(_this.state.domain);
       if (!isValidSyntax) {
@@ -297,11 +324,9 @@ class sendosToolsSmtpCheck {
 
       // resolveMx
       try {
-        console.log("resolveMx");
         const mxRecords = yield _this._resolveMx(_this.state.domain);
         const isValidMxRecord = mxRecords.length > 0;
         _this.state.mxRecords = mxRecords;
-        _this.state.isValidMxRecord = isValidMxRecord;
         if (!isValidMxRecord) {
           _this.state.errors.push("MX record not found.");
           return _this.state;
@@ -309,28 +334,28 @@ class sendosToolsSmtpCheck {
       } catch (err) {
         _this.state.error.push("MX record not found.");
         return _this.state;
-        throw new Error("MX record check failed.");
+        throw new Error("resolveMx check failed.");
       }
 
       // resolveSmtp
       try {
-        console.log("resolveSmtp");
-        const { domain, mxRecords, timeout } = _this.state;
+        const { domain, mxRecords, options } = _this.state;
+        let timeout = options.timeout;
         const smtpMessages = yield _this._resolveSmtp({
           domain,
           mxRecords,
           timeout
         });
-        _this.state.smtpMessages = smtpMessages;
+        _this.state.smtpMessages = smtpMessages.response;
+        _this.state.transactionTime = smtpMessages.transactionTime * 5;
       } catch (err) {
         _this.state.errors.push("Email server is invalid or not available.");
         return _this.state;
-        throw new Error('Mailbox check failed.');
+        throw new Error("resolveSmtp check failed.");
       }
 
       // rDnsMismatch
       try {
-        console.log("rDnsMismatch");
         const isRdnsMismatch = _this._rDnsMismatch(_this.state.domain);
 
         // this.state.rDnsMismatch = rDnsMismatch
@@ -340,7 +365,6 @@ class sendosToolsSmtpCheck {
 
       // validHostname
       try {
-        console.log("validHostname");
         const isValidHostname = _this._validHostname(_this.state.domain);
       } catch (err) {
         throw new Error("validHostname check failed.");
@@ -348,7 +372,6 @@ class sendosToolsSmtpCheck {
 
       // bannerCheck
       try {
-        console.log("bannerCheck");
         const isBannerCheck = _this._bannerCheck(_this.state.domain);
       } catch (err) {
         throw new Error("bannerCheck check failed.");
@@ -356,7 +379,6 @@ class sendosToolsSmtpCheck {
 
       // tls
       try {
-        console.log("tls");
         const isTls = _this._tls(_this.state.domain);
       } catch (err) {
         throw new Error("tls check failed.");
@@ -364,7 +386,6 @@ class sendosToolsSmtpCheck {
 
       // openRelay
       try {
-        console.log("openRelay");
         const isOpenRelay = _this._openRelay(_this.state.domain);
       } catch (err) {
         console.log(err);
@@ -376,22 +397,16 @@ class sendosToolsSmtpCheck {
       let result = "";
 
       if (isComplete) {
-        const { status } = _this.state.smtpMessages[3];
+        const { status } = _this.state.smtpMessages[0];
         // OK RESPONSE
-        if (status === 250) {
-          // result = 'Mailbox is valid.'
+        if (status === 220) {
           _this.state.result = true;
         } else {
-          // result = 'Mailbox is invalid.'
           _this.state.result = false;
         }
       } else {
-        // result = 'Could not validate mailbox.'
         _this.state.result = false;
       }
-
-      console.log("FINISH");
-
       return _this.state;
     })();
   }
