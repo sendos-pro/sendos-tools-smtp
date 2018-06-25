@@ -6,7 +6,6 @@ import dns from "dns";
 import net from "net";
 import os from "os";
 import randomstring from "randomstring";
-import maxmind from "maxmind";
 
 const resolveMx = hostname => {
   return new Promise((resolve, reject) => {
@@ -244,16 +243,16 @@ class sendosToolsSmtpCheck {
 
         if (status === 220) {
           smtpMessages.push({
-            command: "connection",
-            responce: data,
+            command: "CONNECTION",
+            response: data,
             status,
             time: queryTime
           });
         } else {
-          let type = commands[step - 1].type;
+          // let type = commands[step - 1].type;
           smtpMessages.push({
-            command: type,
-            responce: response.length == 1 ? data : response,
+            command: commands[step - 1].command,
+            response: response.length == 1 ? data : response,
             status,
             time: queryTime
           });

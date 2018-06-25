@@ -16,10 +16,6 @@ var _randomstring = require("randomstring");
 
 var _randomstring2 = _interopRequireDefault(_randomstring);
 
-var _maxmind = require("maxmind");
-
-var _maxmind2 = _interopRequireDefault(_maxmind);
-
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function _asyncToGenerator(fn) { return function () { var gen = fn.apply(this, arguments); return new Promise(function (resolve, reject) { function step(key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { return Promise.resolve(value).then(function (value) { step("next", value); }, function (err) { step("throw", err); }); } } return step("next"); }); }; } /**
@@ -262,16 +258,16 @@ class sendosToolsSmtpCheck {
 
         if (status === 220) {
           smtpMessages.push({
-            command: "connection",
-            responce: data,
+            command: "CONNECTION",
+            response: data,
             status,
             time: queryTime
           });
         } else {
-          let type = commands[step - 1].type;
+          // let type = commands[step - 1].type;
           smtpMessages.push({
-            command: type,
-            responce: response.length == 1 ? data : response,
+            command: commands[step - 1].command,
+            response: response.length == 1 ? data : response,
             status,
             time: queryTime
           });
