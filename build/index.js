@@ -85,9 +85,9 @@ class sendosToolsSmtpCheck {
       smtpBanner: false,
       connectionTime: 0,
       transactionTime: 0,
-      aRecord: [],
+      aRecords: [],
       // checked
-      checked: {
+      checks: {
         syntaxValid: {
           result: false
         },
@@ -414,10 +414,10 @@ class sendosToolsSmtpCheck {
       try {
         const resolvePattern = yield _this._resolvePattern(_this.state.value);
 
-        _this.state.aRecord = resolvePattern;
-        _this.state.checked.syntaxValid.result = true;
+        _this.state.aRecords = resolvePattern;
+        _this.state.checks.syntaxValid.result = true;
       } catch (err) {
-        _this.state.checked.syntaxValid.error = "Не прошли resolvePattern";
+        _this.state.checks.syntaxValid.error = "Не прошли resolvePattern";
         return _this.state;
         // throw new Error("resolvePattern check failed.");
       }
@@ -436,7 +436,7 @@ class sendosToolsSmtpCheck {
         _this.state.smtpBanner = smtpMessages.smtpBanner;
         _this.state.transactionTime = smtpMessages.transactionTime * 5;
         _this.state.connectionTime = smtpMessages.connectionTime;
-        _this.state.checked.isConnected.result = true;
+        _this.state.checks.isConnected.result = true;
       } catch (err) {
         let timeout = _this.state.options.timeout;
         let message = "Unable to connect " + _this.state.value;
@@ -445,19 +445,19 @@ class sendosToolsSmtpCheck {
           message = "Unable to connect " + _this.state.value + " after " + timeout / 1000 + " seconds.";
         }
 
-        _this.state.checked.isConnected.error = message;
+        _this.state.checks.isConnected.error = message;
         return _this.state;
         // throw new Error("resolveSmtp check failed.");
       }
 
       // bannerCheck
       try {
-        const isBannerCheck = yield _this._bannerCheck(_this.state.smtpBanner, _this.state.aRecord);
+        const isBannerCheck = yield _this._bannerCheck(_this.state.smtpBanner, _this.state.aRecords);
 
         if (isBannerCheck) {
-          _this.state.checked.bannerCheck.result = true;
+          _this.state.checks.bannerCheck.result = true;
         } else {
-          _this.state.checked.bannerCheck.error = "Не прошли bannerCheck";
+          _this.state.checks.bannerCheck.error = "Не прошли bannerCheck";
         }
       } catch (err) {
         throw new Error("bannerCheck check failed.");
@@ -465,12 +465,12 @@ class sendosToolsSmtpCheck {
 
       // rDnsMismatch
       try {
-        const isRdnsMismatch = yield _this._rDnsMismatch(_this.state.aRecord, _this.state.value);
+        const isRdnsMismatch = yield _this._rDnsMismatch(_this.state.aRecords, _this.state.value);
 
         if (isRdnsMismatch) {
-          _this.state.checked.rDnsMismatch.result = true;
+          _this.state.checks.rDnsMismatch.result = true;
         } else {
-          _this.state.checked.rDnsMismatch.error = "Не прошли rDnsMismatch";
+          _this.state.checks.rDnsMismatch.error = "Не прошли rDnsMismatch";
         }
       } catch (err) {
         throw new Error("rDnsMismatch check failed.");
@@ -478,12 +478,12 @@ class sendosToolsSmtpCheck {
 
       // validHostname
       try {
-        const isValidHostname = yield _this._validHostname(_this.state.aRecord, _this.state.smtpMessages[1].response[0].match(/^250-(.+?)($| )/)[1]);
+        const isValidHostname = yield _this._validHostname(_this.state.aRecords, _this.state.smtpMessages[1].response[0].match(/^250-(.+?)($| )/)[1]);
 
         if (isValidHostname) {
-          _this.state.checked.validHostname.result = true;
+          _this.state.checks.validHostname.result = true;
         } else {
-          _this.state.checked.validHostname.error = "Не прошли validHostname";
+          _this.state.checks.validHostname.error = "Не прошли validHostname";
         }
       } catch (err) {
         throw new Error("validHostname check failed.");
@@ -500,9 +500,9 @@ class sendosToolsSmtpCheck {
         const isTls = response.match(/250\-STARTTLS/);
 
         if (isTls) {
-          _this.state.checked.supportTls.result = true;
+          _this.state.checks.supportTls.result = true;
         } else {
-          _this.state.checked.supportTls.error = "Не прошли tls";
+          _this.state.checks.supportTls.error = "Не прошли tls";
         }
       } catch (err) {
         throw new Error("tls check failed.");
@@ -518,9 +518,9 @@ class sendosToolsSmtpCheck {
 
         const isOpenRelay = response.match(/^250/);
         if (!isOpenRelay) {
-          _this.state.checked.openRelay.result = true;
+          _this.state.checks.openRelay.result = true;
         } else {
-          _this.state.checked.openRelay.error = "Не прошли openRelay";
+          _this.state.checks.openRelay.error = "Не прошли openRelay";
         }
       } catch (err) {
         throw new Error("openRelay check failed.");

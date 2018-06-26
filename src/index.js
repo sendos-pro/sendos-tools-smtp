@@ -70,9 +70,9 @@ class sendosToolsSmtpCheck {
       smtpBanner: false,
       connectionTime: 0,
       transactionTime: 0,
-      aRecord: [],
+      aRecords: [],
       // checked
-      checked: {
+      checks: {
         syntaxValid: {
           result: false
         },
@@ -396,10 +396,10 @@ class sendosToolsSmtpCheck {
     try {
       const resolvePattern = await this._resolvePattern(this.state.value);
 
-      this.state.aRecord = resolvePattern;
-      this.state.checked.syntaxValid.result = true;
+      this.state.aRecords = resolvePattern;
+      this.state.checks.syntaxValid.result = true;
     } catch (err) {
-      this.state.checked.syntaxValid.error = "Не прошли resolvePattern";
+      this.state.checks.syntaxValid.error = "Не прошли resolvePattern";
       return this.state;
       // throw new Error("resolvePattern check failed.");
     }
@@ -418,7 +418,7 @@ class sendosToolsSmtpCheck {
       this.state.smtpBanner = smtpMessages.smtpBanner;
       this.state.transactionTime = smtpMessages.transactionTime * 5;
       this.state.connectionTime = smtpMessages.connectionTime;
-      this.state.checked.isConnected.result = true;
+      this.state.checks.isConnected.result = true;
     } catch (err) {
       let timeout = this.state.options.timeout;
       let message = "Unable to connect " + this.state.value;
@@ -432,7 +432,7 @@ class sendosToolsSmtpCheck {
           " seconds.";
       }
 
-      this.state.checked.isConnected.error = message;
+      this.state.checks.isConnected.error = message;
       return this.state;
       // throw new Error("resolveSmtp check failed.");
     }
@@ -441,13 +441,13 @@ class sendosToolsSmtpCheck {
     try {
       const isBannerCheck = await this._bannerCheck(
         this.state.smtpBanner,
-        this.state.aRecord
+        this.state.aRecords
       );
 
       if (isBannerCheck) {
-        this.state.checked.bannerCheck.result = true;
+        this.state.checks.bannerCheck.result = true;
       } else {
-        this.state.checked.bannerCheck.error = "Не прошли bannerCheck";
+        this.state.checks.bannerCheck.error = "Не прошли bannerCheck";
       }
     } catch (err) {
       throw new Error("bannerCheck check failed.");
@@ -456,14 +456,14 @@ class sendosToolsSmtpCheck {
     // rDnsMismatch
     try {
       const isRdnsMismatch = await this._rDnsMismatch(
-        this.state.aRecord,
+        this.state.aRecords,
         this.state.value
       );
 
       if (isRdnsMismatch) {
-        this.state.checked.rDnsMismatch.result = true;
+        this.state.checks.rDnsMismatch.result = true;
       } else {
-        this.state.checked.rDnsMismatch.error = "Не прошли rDnsMismatch";
+        this.state.checks.rDnsMismatch.error = "Не прошли rDnsMismatch";
       }
     } catch (err) {
       throw new Error("rDnsMismatch check failed.");
@@ -472,14 +472,14 @@ class sendosToolsSmtpCheck {
     // validHostname
     try {
       const isValidHostname = await this._validHostname(
-        this.state.aRecord,
+        this.state.aRecords,
         this.state.smtpMessages[1].response[0].match(/^250-(.+?)($| )/)[1]
       );
 
       if (isValidHostname) {
-        this.state.checked.validHostname.result = true;
+        this.state.checks.validHostname.result = true;
       } else {
-        this.state.checked.validHostname.error = "Не прошли validHostname";
+        this.state.checks.validHostname.error = "Не прошли validHostname";
       }
     } catch (err) {
       throw new Error("validHostname check failed.");
@@ -496,9 +496,9 @@ class sendosToolsSmtpCheck {
       const isTls = response.match(/250\-STARTTLS/);
 
       if (isTls) {
-        this.state.checked.supportTls.result = true;
+        this.state.checks.supportTls.result = true;
       } else {
-        this.state.checked.supportTls.error = "Не прошли tls";
+        this.state.checks.supportTls.error = "Не прошли tls";
       }
     } catch (err) {
       throw new Error("tls check failed.");
@@ -514,9 +514,9 @@ class sendosToolsSmtpCheck {
 
       const isOpenRelay = response.match(/^250/);
       if (!isOpenRelay) {
-        this.state.checked.openRelay.result = true;
+        this.state.checks.openRelay.result = true;
       } else {
-        this.state.checked.openRelay.error = "Не прошли openRelay";
+        this.state.checks.openRelay.error = "Не прошли openRelay";
       }
     } catch (err) {
       throw new Error("openRelay check failed.");
