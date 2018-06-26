@@ -67,13 +67,17 @@ class sendosToolsSmtpCheck {
       // args
       value,
       // domain,
-      smtpBanner: false,
+      hostName: '',
+      smtpBanner: '',
       connectionTime: 0,
       transactionTime: 0,
       aRecords: [],
       // checked
       checks: {
         syntaxValid: {
+          result: false
+        },
+        resolveRecord: {
           result: false
         },
         isConnected: {
@@ -103,24 +107,25 @@ class sendosToolsSmtpCheck {
     };
   }
 
+
   /**
-   * Check pattern
+   * Check resolve record
    */
-  static resolvePattern(value) {
+  static resolveRecord(value) {
     return new Promise((resolve, reject) => {
       let result = [];
       if (isIpv4(value)) {
         // if IP
         dns.reverse(value, (err, ptr) => {
-          if (err) return reject("Cant get PTR record");
+          if (err) return reject("Can't get the PTR record");
 
           dns.resolve4(ptr[0], (err, aRecord) => {
             // console.log(aRecord)
-            if (err) return reject("Cant get A record");
+            if (err) return reject("Can't get the A record");
 
             aRecord.forEach(function(item, i, arr) {
               dns.reverse(item, (err, ptr) => {
-                if (err) return reject("Cant get PTR record");
+                if (err) return reject("Can't get the PTR record");
                 result.push({ value: item, rDns: ptr[0] });
 
                 if (arr.length - 1 == i) {
@@ -134,11 +139,11 @@ class sendosToolsSmtpCheck {
         dns.resolve4(value, (err, aRecord) => {
           // if DOMAIN
           // if(err) console.log(ptr)
-          if (err) return reject("Cant get A record");
+          if (err) return reject("Can't get the A record");
 
           aRecord.forEach(function(item, i, arr) {
             dns.reverse(item, (err, ptr) => {
-              if (err) return reject("Cant get PTR record");
+              if (err) return reject("Can't get the PTR record");
               result.push({ value: item, rDns: ptr[0] });
 
               if (arr.length - 1 == i) {
@@ -147,15 +152,28 @@ class sendosToolsSmtpCheck {
             });
           });
 
-          // let ipv4 = aRecord;
-
-          // dns.reverse(ipv4[0], (err, ptr) => {
-          //   if (err) return reject("Cant get PTR record");
-          //   result.aRecord = ipv4;
-          //   result.rDns = ptr[0];
-          //   resolve(result);
-          // });
         });
+      }
+
+    });
+  }
+
+
+  // private instance method
+  _resolveRecord(value) {
+    return sendosToolsSmtpCheck.resolveRecord(value);
+  }
+
+
+  /**
+   * Check pattern
+   */
+  static resolvePattern(value) {
+    return new Promise((resolve, reject) => {
+      if (isIpv4(value)) {
+        resolve(true)
+      } else if (isDomain(value)) {
+        resolve(true)
       } else {
         return reject("MX or IP-address pattern is invalid.");
       }
@@ -396,13 +414,31 @@ class sendosToolsSmtpCheck {
     try {
       const resolvePattern = await this._resolvePattern(this.state.value);
 
-      this.state.aRecords = resolvePattern;
-      this.state.checks.syntaxValid.result = true;
+      if(resolvePattern) {
+        this.state.checks.syntaxValid.result = true;
+      } else {
+        this.state.checks.syntaxValid.error = "MX or IP-address pattern is invalid.";
+      }
+      
     } catch (err) {
-      this.state.checks.syntaxValid.error = "Не прошли resolvePattern";
+      this.state.checks.syntaxValid.error = "MX or IP-address pattern is invalid.";
       return this.state;
       // throw new Error("resolvePattern check failed.");
     }
+
+    // resolveRecord
+    try {
+      const resolveRecord = await this._resolveRecord(this.state.value);
+
+      this.state.aRecords = resolveRecord;
+      this.state.checks.resolveRecord.result = true;
+    } catch (err) {
+      this.state.checks.resolveRecord.error = err;
+      return this.state;
+      // throw new Error("resolvePattern check failed.");
+    }
+
+
     // resolveSmtp
     try {
       const { value, options } = this.state;
@@ -447,7 +483,7 @@ class sendosToolsSmtpCheck {
       if (isBannerCheck) {
         this.state.checks.bannerCheck.result = true;
       } else {
-        this.state.checks.bannerCheck.error = "Не прошли bannerCheck";
+        this.state.checks.bannerCheck.error = "Smtp banner ["+this.state.smtpBanner+"] does not match rDNS IP address";
       }
     } catch (err) {
       throw new Error("bannerCheck check failed.");
@@ -463,7 +499,7 @@ class sendosToolsSmtpCheck {
       if (isRdnsMismatch) {
         this.state.checks.rDnsMismatch.result = true;
       } else {
-        this.state.checks.rDnsMismatch.error = "Не прошли rDnsMismatch";
+        this.state.checks.rDnsMismatch.error =  this.state.value + " not resolves to SMTP";
       }
     } catch (err) {
       throw new Error("rDnsMismatch check failed.");
@@ -471,16 +507,22 @@ class sendosToolsSmtpCheck {
 
     // validHostname
     try {
+
+      const hostName = this.state.smtpMessages[1].response[0].match(/^250-(.+?)($| )/)[1]
+
+      this.state.hostName = hostName;
+
       const isValidHostname = await this._validHostname(
         this.state.aRecords,
-        this.state.smtpMessages[1].response[0].match(/^250-(.+?)($| )/)[1]
+        hostName
       );
 
       if (isValidHostname) {
         this.state.checks.validHostname.result = true;
       } else {
-        this.state.checks.validHostname.error = "Не прошли validHostname";
+        this.state.checks.validHostname.error = "rDNS is not a valid hostname!";
       }
+
     } catch (err) {
       throw new Error("validHostname check failed.");
     }
@@ -498,7 +540,7 @@ class sendosToolsSmtpCheck {
       if (isTls) {
         this.state.checks.supportTls.result = true;
       } else {
-        this.state.checks.supportTls.error = "Не прошли tls";
+        this.state.checks.supportTls.error = "No TLS / SSL support";
       }
     } catch (err) {
       throw new Error("tls check failed.");
@@ -516,7 +558,7 @@ class sendosToolsSmtpCheck {
       if (!isOpenRelay) {
         this.state.checks.openRelay.result = true;
       } else {
-        this.state.checks.openRelay.error = "Не прошли openRelay";
+        this.state.checks.openRelay.error = "Your server openRelay is bad!";
       }
     } catch (err) {
       throw new Error("openRelay check failed.");

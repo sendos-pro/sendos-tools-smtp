@@ -82,13 +82,17 @@ class sendosToolsSmtpCheck {
       // args
       value,
       // domain,
-      smtpBanner: false,
+      hostName: '',
+      smtpBanner: '',
       connectionTime: 0,
       transactionTime: 0,
       aRecords: [],
       // checked
       checks: {
         syntaxValid: {
+          result: false
+        },
+        resolveRecord: {
           result: false
         },
         isConnected: {
@@ -119,23 +123,23 @@ class sendosToolsSmtpCheck {
   }
 
   /**
-   * Check pattern
+   * Check resolve record
    */
-  static resolvePattern(value) {
+  static resolveRecord(value) {
     return new Promise((resolve, reject) => {
       let result = [];
       if (isIpv4(value)) {
         // if IP
         _dns2.default.reverse(value, (err, ptr) => {
-          if (err) return reject("Cant get PTR record");
+          if (err) return reject("Can't get the PTR record");
 
           _dns2.default.resolve4(ptr[0], (err, aRecord) => {
             // console.log(aRecord)
-            if (err) return reject("Cant get A record");
+            if (err) return reject("Can't get the A record");
 
             aRecord.forEach(function (item, i, arr) {
               _dns2.default.reverse(item, (err, ptr) => {
-                if (err) return reject("Cant get PTR record");
+                if (err) return reject("Can't get the PTR record");
                 result.push({ value: item, rDns: ptr[0] });
 
                 if (arr.length - 1 == i) {
@@ -149,11 +153,11 @@ class sendosToolsSmtpCheck {
         _dns2.default.resolve4(value, (err, aRecord) => {
           // if DOMAIN
           // if(err) console.log(ptr)
-          if (err) return reject("Cant get A record");
+          if (err) return reject("Can't get the A record");
 
           aRecord.forEach(function (item, i, arr) {
             _dns2.default.reverse(item, (err, ptr) => {
-              if (err) return reject("Cant get PTR record");
+              if (err) return reject("Can't get the PTR record");
               result.push({ value: item, rDns: ptr[0] });
 
               if (arr.length - 1 == i) {
@@ -161,16 +165,25 @@ class sendosToolsSmtpCheck {
               }
             });
           });
-
-          // let ipv4 = aRecord;
-
-          // dns.reverse(ipv4[0], (err, ptr) => {
-          //   if (err) return reject("Cant get PTR record");
-          //   result.aRecord = ipv4;
-          //   result.rDns = ptr[0];
-          //   resolve(result);
-          // });
         });
+      }
+    });
+  }
+
+  // private instance method
+  _resolveRecord(value) {
+    return sendosToolsSmtpCheck.resolveRecord(value);
+  }
+
+  /**
+   * Check pattern
+   */
+  static resolvePattern(value) {
+    return new Promise((resolve, reject) => {
+      if (isIpv4(value)) {
+        resolve(true);
+      } else if (isDomain(value)) {
+        resolve(true);
       } else {
         return reject("MX or IP-address pattern is invalid.");
       }
@@ -414,13 +427,29 @@ class sendosToolsSmtpCheck {
       try {
         const resolvePattern = yield _this._resolvePattern(_this.state.value);
 
-        _this.state.aRecords = resolvePattern;
-        _this.state.checks.syntaxValid.result = true;
+        if (resolvePattern) {
+          _this.state.checks.syntaxValid.result = true;
+        } else {
+          _this.state.checks.syntaxValid.error = "MX or IP-address pattern is invalid.";
+        }
       } catch (err) {
-        _this.state.checks.syntaxValid.error = "Не прошли resolvePattern";
+        _this.state.checks.syntaxValid.error = "MX or IP-address pattern is invalid.";
         return _this.state;
         // throw new Error("resolvePattern check failed.");
       }
+
+      // resolveRecord
+      try {
+        const resolveRecord = yield _this._resolveRecord(_this.state.value);
+
+        _this.state.aRecords = resolveRecord;
+        _this.state.checks.resolveRecord.result = true;
+      } catch (err) {
+        _this.state.checks.resolveRecord.error = err;
+        return _this.state;
+        // throw new Error("resolvePattern check failed.");
+      }
+
       // resolveSmtp
       try {
         const { value, options } = _this.state;
@@ -457,7 +486,7 @@ class sendosToolsSmtpCheck {
         if (isBannerCheck) {
           _this.state.checks.bannerCheck.result = true;
         } else {
-          _this.state.checks.bannerCheck.error = "Не прошли bannerCheck";
+          _this.state.checks.bannerCheck.error = "Smtp banner [" + _this.state.smtpBanner + "] does not match rDNS IP address";
         }
       } catch (err) {
         throw new Error("bannerCheck check failed.");
@@ -470,7 +499,7 @@ class sendosToolsSmtpCheck {
         if (isRdnsMismatch) {
           _this.state.checks.rDnsMismatch.result = true;
         } else {
-          _this.state.checks.rDnsMismatch.error = "Не прошли rDnsMismatch";
+          _this.state.checks.rDnsMismatch.error = _this.state.value + " not resolves to SMTP";
         }
       } catch (err) {
         throw new Error("rDnsMismatch check failed.");
@@ -478,12 +507,17 @@ class sendosToolsSmtpCheck {
 
       // validHostname
       try {
-        const isValidHostname = yield _this._validHostname(_this.state.aRecords, _this.state.smtpMessages[1].response[0].match(/^250-(.+?)($| )/)[1]);
+
+        const hostName = _this.state.smtpMessages[1].response[0].match(/^250-(.+?)($| )/)[1];
+
+        _this.state.hostName = hostName;
+
+        const isValidHostname = yield _this._validHostname(_this.state.aRecords, hostName);
 
         if (isValidHostname) {
           _this.state.checks.validHostname.result = true;
         } else {
-          _this.state.checks.validHostname.error = "Не прошли validHostname";
+          _this.state.checks.validHostname.error = "rDNS is not a valid hostname!";
         }
       } catch (err) {
         throw new Error("validHostname check failed.");
@@ -502,7 +536,7 @@ class sendosToolsSmtpCheck {
         if (isTls) {
           _this.state.checks.supportTls.result = true;
         } else {
-          _this.state.checks.supportTls.error = "Не прошли tls";
+          _this.state.checks.supportTls.error = "No TLS / SSL support";
         }
       } catch (err) {
         throw new Error("tls check failed.");
@@ -520,7 +554,7 @@ class sendosToolsSmtpCheck {
         if (!isOpenRelay) {
           _this.state.checks.openRelay.result = true;
         } else {
-          _this.state.checks.openRelay.error = "Не прошли openRelay";
+          _this.state.checks.openRelay.error = "Your server openRelay is bad!";
         }
       } catch (err) {
         throw new Error("openRelay check failed.");
