@@ -466,6 +466,7 @@ class sendosToolsSmtpCheck {
         _this.state.transactionTime = smtpMessages.transactionTime * 5;
         _this.state.connectionTime = smtpMessages.connectionTime;
         _this.state.checks.isConnected.result = true;
+        _this.state.result = true;
       } catch (err) {
         let timeout = _this.state.options.timeout;
         let message = "Unable to connect " + _this.state.value;
