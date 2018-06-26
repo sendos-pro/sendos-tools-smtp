@@ -86,7 +86,6 @@ class sendosToolsSmtpCheck {
       smtpBanner: '',
       connectionTime: 0,
       transactionTime: 0,
-      aRecords: [],
       // checked
       checks: {
         syntaxValid: {
@@ -115,6 +114,7 @@ class sendosToolsSmtpCheck {
         }
       },
       // helpers
+      aRecords: [],
       smtpMessages: [],
       options: {
         timeout: timeout || 15000
