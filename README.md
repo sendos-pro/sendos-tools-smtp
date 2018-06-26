@@ -10,7 +10,7 @@ npm i sendos-tools-smtp
 const smtpCheck = require('sendos-tools-smtp');
 
 smtpCheck
-	.check('testers72@gmail.com')
+	.check('mx.yandex.ru')
 	.then(function(result) {
 		console.log(result);
 	})

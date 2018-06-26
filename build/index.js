@@ -199,9 +199,9 @@ class sendosToolsSmtpCheck {
             resolve(true);
           }
         });
-      } else {
-        resolve(false);
       }
+
+      resolve(false);
     });
   }
 
@@ -220,7 +220,7 @@ class sendosToolsSmtpCheck {
           resolve(true);
         }
       });
-      reject(false);
+      resolve(false);
     });
   }
 
@@ -239,7 +239,7 @@ class sendosToolsSmtpCheck {
           resolve(true);
         }
       });
-      reject(false);
+      resolve(false);
     });
   }
 
@@ -417,11 +417,10 @@ class sendosToolsSmtpCheck {
         _this.state.aRecord = resolvePattern;
         _this.state.checked.syntaxValid.result = true;
       } catch (err) {
-        _this.state.checked.syntaxValid.error = err;
+        _this.state.checked.syntaxValid.error = "Не прошли resolvePattern";
         return _this.state;
         // throw new Error("resolvePattern check failed.");
       }
-
       // resolveSmtp
       try {
         const { value, options } = _this.state;
@@ -453,7 +452,7 @@ class sendosToolsSmtpCheck {
 
       // bannerCheck
       try {
-        const isBannerCheck = _this._bannerCheck(_this.state.smtpBanner, _this.state.aRecord);
+        const isBannerCheck = yield _this._bannerCheck(_this.state.smtpBanner, _this.state.aRecord);
 
         if (isBannerCheck) {
           _this.state.checked.bannerCheck.result = true;
@@ -466,7 +465,7 @@ class sendosToolsSmtpCheck {
 
       // rDnsMismatch
       try {
-        const isRdnsMismatch = _this._rDnsMismatch(_this.state.aRecord, _this.state.value);
+        const isRdnsMismatch = yield _this._rDnsMismatch(_this.state.aRecord, _this.state.value);
 
         if (isRdnsMismatch) {
           _this.state.checked.rDnsMismatch.result = true;
@@ -479,7 +478,7 @@ class sendosToolsSmtpCheck {
 
       // validHostname
       try {
-        const isValidHostname = _this._validHostname(_this.state.aRecord, _this.state.smtpMessages[1].response[0].match(/^250-(.+?) /)[1]);
+        const isValidHostname = yield _this._validHostname(_this.state.aRecord, _this.state.smtpMessages[1].response[0].match(/^250-(.+?)($| )/)[1]);
 
         if (isValidHostname) {
           _this.state.checked.validHostname.result = true;
@@ -492,7 +491,13 @@ class sendosToolsSmtpCheck {
 
       // tls
       try {
-        const isTls = _this.state.smtpMessages[1].response.join().match(/250\-STARTTLS/);
+        let response = _this.state.smtpMessages[1].response;
+
+        if (response instanceof Array) {
+          response = response.join();
+        }
+
+        const isTls = response.match(/250\-STARTTLS/);
 
         if (isTls) {
           _this.state.checked.supportTls.result = true;
@@ -505,9 +510,13 @@ class sendosToolsSmtpCheck {
 
       // openRelay
       try {
+        let response = _this.state.smtpMessages[3].response;
 
-        const isOpenRelay = _this.state.smtpMessages[3].response.match(/^250/);
+        if (response instanceof Array) {
+          response = response.join();
+        }
 
+        const isOpenRelay = response.match(/^250/);
         if (!isOpenRelay) {
           _this.state.checked.openRelay.result = true;
         } else {

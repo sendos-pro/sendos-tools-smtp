@@ -184,9 +184,9 @@ class sendosToolsSmtpCheck {
             resolve(true);
           }
         });
-      } else {
-        resolve(false);
       }
+
+      resolve(false);
     });
   }
 
@@ -205,7 +205,7 @@ class sendosToolsSmtpCheck {
           resolve(true);
         }
       });
-      reject(false);
+      resolve(false);
     });
   }
 
@@ -224,7 +224,7 @@ class sendosToolsSmtpCheck {
           resolve(true);
         }
       });
-      reject(false);
+      resolve(false);
     });
   }
 
@@ -399,11 +399,10 @@ class sendosToolsSmtpCheck {
       this.state.aRecord = resolvePattern;
       this.state.checked.syntaxValid.result = true;
     } catch (err) {
-      this.state.checked.syntaxValid.error = err;
+      this.state.checked.syntaxValid.error = "Не прошли resolvePattern";
       return this.state;
       // throw new Error("resolvePattern check failed.");
     }
-
     // resolveSmtp
     try {
       const { value, options } = this.state;
@@ -440,7 +439,7 @@ class sendosToolsSmtpCheck {
 
     // bannerCheck
     try {
-      const isBannerCheck = this._bannerCheck(
+      const isBannerCheck = await this._bannerCheck(
         this.state.smtpBanner,
         this.state.aRecord
       );
@@ -456,7 +455,7 @@ class sendosToolsSmtpCheck {
 
     // rDnsMismatch
     try {
-      const isRdnsMismatch = this._rDnsMismatch(
+      const isRdnsMismatch = await this._rDnsMismatch(
         this.state.aRecord,
         this.state.value
       );
@@ -472,9 +471,9 @@ class sendosToolsSmtpCheck {
 
     // validHostname
     try {
-      const isValidHostname = this._validHostname(
+      const isValidHostname = await this._validHostname(
         this.state.aRecord,
-        this.state.smtpMessages[1].response[0].match(/^250-(.+?) /)[1]
+        this.state.smtpMessages[1].response[0].match(/^250-(.+?)($| )/)[1]
       );
 
       if (isValidHostname) {
@@ -488,29 +487,37 @@ class sendosToolsSmtpCheck {
 
     // tls
     try {
-      const isTls = this.state.smtpMessages[1].response.join().match(/250\-STARTTLS/);
+      let response = this.state.smtpMessages[1].response;
 
-      if(isTls) {
+      if (response instanceof Array) {
+        response = response.join();
+      }
+      
+      const isTls = response.match(/250\-STARTTLS/);
+
+      if (isTls) {
         this.state.checked.supportTls.result = true;
       } else {
         this.state.checked.supportTls.error = "Не прошли tls";
       }
-
     } catch (err) {
       throw new Error("tls check failed.");
     }
 
     // openRelay
     try {
+      let response = this.state.smtpMessages[3].response;
 
-      const isOpenRelay = this.state.smtpMessages[3].response.match(/^250/);
+      if (response instanceof Array) {
+        response = response.join();
+      }
 
-      if(!isOpenRelay) {
+      const isOpenRelay = response.match(/^250/);
+      if (!isOpenRelay) {
         this.state.checked.openRelay.result = true;
       } else {
         this.state.checked.openRelay.error = "Не прошли openRelay";
       }
-
     } catch (err) {
       throw new Error("openRelay check failed.");
     }
